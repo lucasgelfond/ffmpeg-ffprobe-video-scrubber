@@ -2,7 +2,6 @@ import { Upload, Button, message, Slider } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { createFFmpeg, fetchFile } from "@ffmpeg/ffmpeg";
 import { InboxOutlined } from "@ant-design/icons";
-import { fileTypeFromBuffer } from "file-type";
 import { Analytics } from "@vercel/analytics/react";
 import Image from "next/image";
 
@@ -28,19 +27,17 @@ const App = () => {
         "-frames:v",
         "1",
         "-q:v",
-        "5", // Medium compression quality - range is 2-31
+        "5",
         "-vf",
-        "scale=320:-1", // Increased resolution to 480px width
+        "scale=320:-1",
         "-preset",
-        "ultrafast", // Fastest encoding preset
+        "ultrafast",
         "frame.jpg"
       );
 
       const data = ffmpeg.current.FS("readFile", "frame.jpg");
-      const type = await fileTypeFromBuffer(data.buffer);
-
       const objectURL = URL.createObjectURL(
-        new Blob([data.buffer], { type: type.mime })
+        new Blob([data.buffer], { type: "image/jpeg" })
       );
       setOutputImageUrl(objectURL);
     } catch (err) {
