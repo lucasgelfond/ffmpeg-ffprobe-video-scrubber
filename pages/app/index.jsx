@@ -1,7 +1,7 @@
-import { Upload, Button, message, Slider } from "antd";
+import { Upload, Button, message, Slider, Input } from "antd";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createFFmpeg, fetchFile } from "@ffmpeg/ffmpeg";
-import { InboxOutlined } from "@ant-design/icons";
+import { InboxOutlined, LeftOutlined, RightOutlined } from "@ant-design/icons";
 import Image from "next/image";
 import { FFprobeWorker } from "ffprobe-wasm";
 
@@ -70,6 +70,23 @@ const App = () => {
   const handleSliderChange = async (value) => {
     setFrameNumber(value);
     await extractFrame(value);
+  };
+
+  const handleInputChange = async (e) => {
+    const value = parseInt(e.target.value);
+    if (!isNaN(value) && value >= 1 && value <= videoInfo.totalFrames) {
+      setFrameNumber(value);
+      await extractFrame(value);
+    }
+  };
+
+  const handleFrameStep = async (step) => {
+    const newFrame = Math.min(
+      Math.max(1, frameNumber + step),
+      videoInfo.totalFrames
+    );
+    setFrameNumber(newFrame);
+    await extractFrame(newFrame);
   };
 
   useEffect(() => {
@@ -145,7 +162,32 @@ const App = () => {
           onChange={handleSliderChange}
           disabled={!file}
         />
-        <p>Current frame: {frameNumber}</p>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            marginTop: "10px",
+          }}
+        >
+          <Button
+            icon={<LeftOutlined />}
+            onClick={() => handleFrameStep(-1)}
+            disabled={!file || frameNumber <= 1}
+          />
+          <Input
+            type="number"
+            value={frameNumber}
+            onChange={handleInputChange}
+            disabled={!file}
+            style={{ width: "100px" }}
+          />
+          <Button
+            icon={<RightOutlined />}
+            onClick={() => handleFrameStep(1)}
+            disabled={!file || frameNumber >= videoInfo.totalFrames}
+          />
+        </div>
       </div>
 
       {outputImageUrl && (
