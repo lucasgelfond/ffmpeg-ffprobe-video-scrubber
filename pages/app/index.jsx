@@ -1,12 +1,9 @@
-import { Spin, Upload, Input, Button, message } from "antd";
+import { Spin, Upload, Button, message } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { createFFmpeg, fetchFile } from "@ffmpeg/ffmpeg";
 import { InboxOutlined } from "@ant-design/icons";
 import { fileTypeFromBuffer } from "file-type";
 import { Analytics } from "@vercel/analytics/react";
-import numerify from "numerify/lib/index.cjs";
-import qs from "query-string";
-import JSZip from "jszip";
 import Image from "next/image";
 
 const { Dragger } = Upload;
@@ -14,119 +11,48 @@ const { Dragger } = Upload;
 const App = () => {
   const [spinning, setSpinning] = useState(false);
   const [tip, setTip] = useState(false);
-  const [inputOptions, setInputOptions] = useState("-i");
-  const [outputOptions, setOutputOptions] = useState("");
-  const [files, setFiles] = useState("");
-  const [outputFiles, setOutputFiles] = useState([]);
   const [outputImageUrl, setOutputImageUrl] = useState("");
   const [file, setFile] = useState();
-  const [fileList, setFileList] = useState([]);
-  const [name, setName] = useState("input.mp4");
-  const [output, setOutput] = useState("output.mp4");
   const ffmpeg = useRef();
-  const currentFSls = useRef([]);
 
   const handleExec = async () => {
     if (!file) {
       return;
     }
-    setOutputFiles([]);
     setOutputImageUrl("");
     try {
       setTip("Loading file into browser");
       setSpinning(true);
 
-      console.log("Files to process:", fileList);
-      console.log(
-        "FFmpeg command:",
-        `ffmpeg ${inputOptions} ${name} ${outputOptions} ${output}`
-      );
+      ffmpeg.current.FS("writeFile", file.name, await fetchFile(file));
 
-      for (const fileItem of fileList) {
-        ffmpeg.current.FS(
-          "writeFile",
-          fileItem.name,
-          await fetchFile(fileItem)
-        );
-      }
-      currentFSls.current = ffmpeg.current.FS("readdir", ".");
-      setTip("start executing the command");
+      setTip("Extracting frame...");
 
       await ffmpeg.current.run(
-        ...inputOptions.split(" "),
-        name,
-        ...outputOptions.split(" "),
-        output
+        "-i",
+        file.name,
+        "-vf",
+        "fps=1",
+        "-vframes",
+        "1",
+        "frame31.jpg"
       );
-      setSpinning(false);
-      const FSls = ffmpeg.current.FS("readdir", ".");
-      const outputFiles = FSls.filter((i) => !currentFSls.current.includes(i));
-      if (outputFiles.length === 1) {
-        const data = ffmpeg.current.FS("readFile", outputFiles[0]);
-        const type = await fileTypeFromBuffer(data.buffer);
 
-        const objectURL = URL.createObjectURL(
-          new Blob([data.buffer], { type: type.mime })
-        );
-        setOutputImageUrl(objectURL);
-        message.success("Run successfully, output image displayed below", 10);
-      } else if (outputFiles.length > 1) {
-        const outputImagesData = [];
-        for (const fileName of outputFiles) {
-          const data = ffmpeg.current.FS("readFile", fileName);
-          const type = await fileTypeFromBuffer(data.buffer);
-          const objectURL = URL.createObjectURL(
-            new Blob([data.buffer], { type: type.mime })
-          );
-          outputImagesData.push({
-            name: fileName,
-            url: objectURL,
-          });
-        }
-        setOutputFiles(outputImagesData);
-        message.success("Run successfully, output images displayed below", 10);
-      } else {
-        message.success(
-          "Run successfully, No files are generated, if you want to see the output of the ffmpeg command, please open the console",
-          10
-        );
-      }
+      setSpinning(false);
+
+      const data = ffmpeg.current.FS("readFile", "frame31.jpg");
+      const type = await fileTypeFromBuffer(data.buffer);
+
+      const objectURL = URL.createObjectURL(
+        new Blob([data.buffer], { type: type.mime })
+      );
+      setOutputImageUrl(objectURL);
+      message.success("Frame extracted successfully", 5);
     } catch (err) {
       console.error(err);
-      message.error(
-        "Failed to run, please check if the command is correct or open the console to view the error details",
-        10
-      );
+      message.error("Failed to extract frame", 5);
+      setSpinning(false);
     }
-  };
-
-  const handleGetFiles = async () => {
-    if (!files) {
-      return;
-    }
-    const filenames = files
-      .split(",")
-      .filter((i) => i)
-      .map((i) => i.trim());
-    const outputFilesData = [];
-    for (let filename of filenames) {
-      try {
-        const data = ffmpeg.current.FS("readFile", filename);
-        const type = await fileTypeFromBuffer(data.buffer);
-
-        const objectURL = URL.createObjectURL(
-          new Blob([data.buffer], { type: type.mime })
-        );
-        outputFilesData.push({
-          name: filename,
-          url: objectURL,
-        });
-      } catch (err) {
-        message.error(`${filename} get failed`);
-        console.error(err);
-      }
-    }
-    setOutputFiles(outputFilesData);
   };
 
   useEffect(() => {
@@ -136,40 +62,12 @@ const App = () => {
         corePath:
           "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js",
       });
-      ffmpeg.current.setProgress(({ ratio }) => {
-        console.log(ratio);
-        setTip(numerify(ratio, "0.0%"));
-      });
-      setTip("ffmpeg static resource loading...");
+      setTip("Loading FFmpeg...");
       setSpinning(true);
       await ffmpeg.current.load();
       setSpinning(false);
     })();
   }, []);
-
-  useEffect(() => {
-    const { inputOptions, outputOptions, output } = qs.parse(
-      window.location.search
-    );
-    if (inputOptions) {
-      setInputOptions(inputOptions);
-    }
-    if (outputOptions) {
-      setOutputOptions(outputOptions);
-    }
-    if (output) {
-      setOutput(output);
-    }
-  }, []);
-
-  useEffect(() => {
-    // run after inputOptions and outputOptions set from querystring
-    setTimeout(() => {
-      let queryString = qs.stringify({ inputOptions, outputOptions, output });
-      const newUrl = `${location.origin}${location.pathname}?${queryString}`;
-      history.pushState("", "", newUrl);
-    });
-  }, [inputOptions, outputOptions, output]);
 
   return (
     <div className="page-app">
@@ -179,98 +77,46 @@ const App = () => {
         </Spin>
       )}
 
-      <h2 align="center">ffmpeg-online</h2>
+      <h2 align="center">FFmpeg Frame Extractor</h2>
 
-      <h4>1. Select file</h4>
+      <h4>Upload Video</h4>
       <p style={{ color: "gray" }}>
-        Your files will not be uploaded to the server, only processed in the
-        browser
+        Your file will be processed entirely in the browser
       </p>
       <Dragger
-        multiple
-        beforeUpload={(file, fileList) => {
+        beforeUpload={(file) => {
           setFile(file);
-          setFileList((v) => [...v, ...fileList]);
-          setName(file.name);
           return false;
         }}
       >
         <p className="ant-upload-drag-icon">
           <InboxOutlined />
         </p>
-        <p className="ant-upload-text">Click or drag file</p>
+        <p className="ant-upload-text">Click or drag video file</p>
       </Dragger>
-      <h4>2. Set ffmpeg options</h4>
-      <div className="exec">
-        ffmpeg
-        <Input
-          value={inputOptions}
-          placeholder="please enter input options"
-          onChange={(event) => setInputOptions(event.target.value)}
-        />
-        <Input
-          value={name}
-          placeholder="please enter input filename"
-          onChange={(event) => setName(event.target.value)}
-        />
-        <Input
-          value={outputOptions}
-          placeholder="please enter output options"
-          onChange={(event) => setOutputOptions(event.target.value)}
-        />
-        <Input
-          value={output}
-          placeholder="Please enter the output file name"
-          onChange={(event) => setOutput(event.target.value)}
-        />
-        <div className="command-text">
-          ffmpeg {inputOptions} {name} {outputOptions} {output}
-        </div>
-      </div>
-      <h4>3. Run and view the output image</h4>
-      <Button type="primary" disabled={!Boolean(file)} onClick={handleExec}>
-        run
+
+      <Button
+        type="primary"
+        onClick={handleExec}
+        disabled={!file}
+        style={{ marginTop: "20px" }}
+      >
+        Extract Frame
       </Button>
-      <br />
-      <br />
+
       {outputImageUrl && (
-        <Image
-          src={outputImageUrl}
-          alt="Output"
-          width={500}
-          height={300}
-          style={{ maxWidth: "100%", height: "auto" }}
-        />
-      )}
-      <h4>4. Get other images from file system (use , split)</h4>
-      <p style={{ color: "gray" }}>
-        In some scenarios, the output contains multiple images. At this time,
-        multiple file names can be separated by commas and typed into the input
-        box below.
-      </p>
-      <Input
-        value={files}
-        placeholder="Please enter the image file names"
-        onChange={(event) => setFiles(event.target.value)}
-      />
-      <Button type="primary" disabled={!Boolean(file)} onClick={handleGetFiles}>
-        confirm
-      </Button>
-      <br />
-      <br />
-      {outputFiles.map((outputFile, index) => (
-        <div key={index}>
-          <p>{outputFile.name}</p>
+        <>
+          <h4>Extracted Frame</h4>
           <Image
-            src={outputFile.url}
-            alt={outputFile.name}
+            src={outputImageUrl}
+            alt="Extracted Frame"
             width={500}
             height={300}
             style={{ maxWidth: "100%", height: "auto" }}
           />
-          <br />
-        </div>
-      ))}
+        </>
+      )}
+
       <br />
       <br />
       <a
