@@ -1,4 +1,4 @@
-import { Spin, Upload, Button, message } from "antd";
+import { Upload, Button, message } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { createFFmpeg, fetchFile } from "@ffmpeg/ffmpeg";
 import { InboxOutlined } from "@ant-design/icons";
@@ -9,8 +9,6 @@ import Image from "next/image";
 const { Dragger } = Upload;
 
 const App = () => {
-  const [spinning, setSpinning] = useState(false);
-  const [tip, setTip] = useState(false);
   const [outputImageUrl, setOutputImageUrl] = useState("");
   const [file, setFile] = useState();
   const ffmpeg = useRef();
@@ -21,12 +19,7 @@ const App = () => {
     }
     setOutputImageUrl("");
     try {
-      setTip("Loading file into browser");
-      setSpinning(true);
-
       ffmpeg.current.FS("writeFile", file.name, await fetchFile(file));
-
-      setTip("Extracting frame...");
 
       await ffmpeg.current.run(
         "-i",
@@ -37,8 +30,6 @@ const App = () => {
         "1",
         "frame31.jpg"
       );
-
-      setSpinning(false);
 
       const data = ffmpeg.current.FS("readFile", "frame31.jpg");
       const type = await fileTypeFromBuffer(data.buffer);
@@ -51,7 +42,6 @@ const App = () => {
     } catch (err) {
       console.error(err);
       message.error("Failed to extract frame", 5);
-      setSpinning(false);
     }
   };
 
@@ -62,21 +52,12 @@ const App = () => {
         corePath:
           "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js",
       });
-      setTip("Loading FFmpeg...");
-      setSpinning(true);
       await ffmpeg.current.load();
-      setSpinning(false);
     })();
   }, []);
 
   return (
     <div className="page-app">
-      {spinning && (
-        <Spin spinning={spinning} tip={tip}>
-          <div className="component-spin" />
-        </Spin>
-      )}
-
       <h2 align="center">FFmpeg Frame Extractor</h2>
 
       <h4>Upload Video</h4>
