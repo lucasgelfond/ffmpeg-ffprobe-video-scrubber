@@ -2,8 +2,8 @@ import { Upload, Button, message, Slider } from "antd";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createFFmpeg, fetchFile } from "@ffmpeg/ffmpeg";
 import { InboxOutlined } from "@ant-design/icons";
-import { Analytics } from "@vercel/analytics/react";
 import Image from "next/image";
+import { FFprobeWorker } from "ffprobe-wasm";
 
 const { Dragger } = Upload;
 
@@ -11,11 +11,20 @@ const App = () => {
   const [outputImageUrl, setOutputImageUrl] = useState("");
   const [file, setFile] = useState();
   const [frameNumber, setFrameNumber] = useState(1);
-  const [isScrubbingVideo, setIsScrubbingVideo] = useState(false);
+  const [videoInfo, setVideoInfo] = useState({
+    width: 0,
+    height: 0,
+    totalFrames: 50,
+    duration: 0,
+    frameRate: 0,
+  });
   const ffmpeg = useRef();
   const fileLoaded = useRef(false);
-  const videoRef = useRef();
-  const videoUrl = useRef();
+  const ffprobeWorker = useRef();
+
+  useEffect(() => {
+    ffprobeWorker.current = new FFprobeWorker();
+  }, []);
 
   const extractFrame = useCallback(
     async (frameNum) => {
@@ -56,17 +65,11 @@ const App = () => {
     [file]
   );
 
-  const handleSliderChange = (value) => {
-    setFrameNumber(value);
-    setIsScrubbingVideo(true);
-    if (videoRef.current) {
-      videoRef.current.currentTime = value / 30;
-    }
-  };
+  useEffect(() => {}, [videoInfo]);
 
-  const handleSliderAfterChange = (value) => {
-    setIsScrubbingVideo(false);
-    extractFrame(value);
+  const handleSliderChange = async (value) => {
+    setFrameNumber(value);
+    await extractFrame(value);
   };
 
   useEffect(() => {
@@ -80,26 +83,29 @@ const App = () => {
     })();
   }, []);
 
+  const getVideoInfo = useCallback(async () => {
+    const fileInfo = await ffprobeWorker.current.getFileInfo(file);
+
+    // Find video stream
+    const videoStream = fileInfo.streams.find((s) => s.codec_type === "video");
+
+    setVideoInfo({
+      width: videoStream.codec_width,
+      height: videoStream.codec_height,
+      totalFrames: parseInt(videoStream.nb_frames),
+      duration: parseFloat(fileInfo.format.duration),
+      frameRate: eval(videoStream.r_frame_rate), // Evaluates "30/1" to 30
+    });
+  }, [file]);
+
   // Reset fileLoaded and create video URL when a new file is selected
   useEffect(() => {
     fileLoaded.current = false;
     if (file) {
-      if (videoUrl.current) {
-        URL.revokeObjectURL(videoUrl.current);
-      }
-      videoUrl.current = URL.createObjectURL(file);
+      getVideoInfo();
       extractFrame(0); // Extract first frame immediately when file is loaded
     }
-  }, [file, extractFrame]);
-
-  // Cleanup video URL on unmount
-  useEffect(() => {
-    return () => {
-      if (videoUrl.current) {
-        URL.revokeObjectURL(videoUrl.current);
-      }
-    };
-  }, []);
+  }, [file, extractFrame, getVideoInfo]);
 
   return (
     <div className="page-app">
@@ -131,38 +137,18 @@ const App = () => {
       </Button>
 
       <div style={{ marginTop: "20px" }}>
-        <h4>Select Frame (1-50)</h4>
+        <h4>Select Frame (1-{videoInfo.totalFrames})</h4>
         <Slider
           min={1}
-          max={50}
+          max={videoInfo.totalFrames}
           value={frameNumber}
           onChange={handleSliderChange}
-          onAfterChange={handleSliderAfterChange}
           disabled={!file}
         />
         <p>Current frame: {frameNumber}</p>
       </div>
 
-      {file && (
-        <div
-          style={{
-            marginTop: "20px",
-            display: isScrubbingVideo ? "block" : "none",
-          }}
-        >
-          <h4>Video Preview</h4>
-          <video
-            ref={videoRef}
-            src={videoUrl.current}
-            style={{ maxWidth: "100%", height: "auto" }}
-            controls={false}
-            playsInline
-            muted
-          />
-        </div>
-      )}
-
-      {outputImageUrl && !isScrubbingVideo && (
+      {outputImageUrl && (
         <>
           <h4>Extracted Frame</h4>
           <Image
