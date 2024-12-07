@@ -1,4 +1,4 @@
-import { Upload, Button, message } from "antd";
+import { Upload, Button, message, Slider } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { createFFmpeg, fetchFile } from "@ffmpeg/ffmpeg";
 import { InboxOutlined } from "@ant-design/icons";
@@ -11,9 +11,10 @@ const { Dragger } = Upload;
 const App = () => {
   const [outputImageUrl, setOutputImageUrl] = useState("");
   const [file, setFile] = useState();
+  const [frameNumber, setFrameNumber] = useState(1);
   const ffmpeg = useRef();
 
-  const handleExec = async () => {
+  const extractFrame = async (frameNum) => {
     if (!file) {
       return;
     }
@@ -25,24 +26,27 @@ const App = () => {
         "-i",
         file.name,
         "-vf",
-        "fps=1",
+        `select='eq(n,${frameNum})'`,
         "-vframes",
         "1",
-        "frame31.jpg"
+        "frame.jpg"
       );
 
-      const data = ffmpeg.current.FS("readFile", "frame31.jpg");
+      const data = ffmpeg.current.FS("readFile", "frame.jpg");
       const type = await fileTypeFromBuffer(data.buffer);
 
       const objectURL = URL.createObjectURL(
         new Blob([data.buffer], { type: type.mime })
       );
       setOutputImageUrl(objectURL);
-      message.success("Frame extracted successfully", 5);
     } catch (err) {
       console.error(err);
-      message.error("Failed to extract frame", 5);
     }
+  };
+
+  const handleSliderChange = (value) => {
+    setFrameNumber(value);
+    extractFrame(value);
   };
 
   useEffect(() => {
@@ -78,12 +82,24 @@ const App = () => {
 
       <Button
         type="primary"
-        onClick={handleExec}
+        onClick={() => extractFrame(frameNumber)}
         disabled={!file}
         style={{ marginTop: "20px" }}
       >
         Extract Frame
       </Button>
+
+      <div style={{ marginTop: "20px" }}>
+        <h4>Select Frame (1-50)</h4>
+        <Slider
+          min={1}
+          max={50}
+          value={frameNumber}
+          onChange={handleSliderChange}
+          disabled={!file}
+        />
+        <p>Current frame: {frameNumber}</p>
+      </div>
 
       {outputImageUrl && (
         <>
