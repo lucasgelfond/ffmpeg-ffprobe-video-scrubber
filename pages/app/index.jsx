@@ -28,7 +28,6 @@ const App = () => {
   useEffect(() => {
     ffprobeWorker.current = new FFprobeWorker();
   }, []);
-
   const extractFrame = useCallback(
     async (frameNum) => {
       if (!file) {
@@ -48,11 +47,9 @@ const App = () => {
           "-frames:v",
           "1",
           "-q:v",
-          "2",
-          "-vf",
-          "scale=480:-1",
+          "1", // Best quality (1-31, lower is better)
           "-preset",
-          "ultrafast",
+          "veryslow", // Highest quality preset
           "frame.jpg"
         );
 
