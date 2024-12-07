@@ -80,6 +80,7 @@ const App = () => {
 
   const handleSliderAfterChange = async (value) => {
     setIsScrubbing(false);
+    setOutputImageUrl(""); // Clear the image while extracting new frame
     await extractFrame(value);
   };
 
@@ -214,7 +215,7 @@ const App = () => {
       {file && (
         <div style={{ marginTop: "20px" }}>
           <h4>Preview</h4>
-          {isScrubbing ? (
+          {isScrubbing || !outputImageUrl ? (
             <video
               ref={videoRef}
               src={videoUrl}
@@ -223,15 +224,13 @@ const App = () => {
               style={{ maxWidth: "100%", height: "auto" }}
             />
           ) : (
-            outputImageUrl && (
-              <Image
-                src={outputImageUrl}
-                alt="Extracted Frame"
-                width={displayWidth}
-                height={displayHeight}
-                style={{ maxWidth: "100%", height: "auto" }}
-              />
-            )
+            <Image
+              src={outputImageUrl}
+              alt="Extracted Frame"
+              width={displayWidth}
+              height={displayHeight}
+              style={{ maxWidth: "100%", height: "auto" }}
+            />
           )}
         </div>
       )}
