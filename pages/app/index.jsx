@@ -18,17 +18,17 @@ const App = () => {
     if (!file) {
       return;
     }
-    setOutputImageUrl("");
     try {
       ffmpeg.current.FS("writeFile", file.name, await fetchFile(file));
-
       await ffmpeg.current.run(
+        "-ss",
+        `${frameNum / 30}`, // Assuming 30fps - converts frame number to seconds
         "-i",
         file.name,
-        "-vf",
-        `select='eq(n,${frameNum})'`,
-        "-vframes",
+        "-frames:v",
         "1",
+        "-q:v",
+        "2", // Lower quality for faster processing
         "frame.jpg"
       );
 
