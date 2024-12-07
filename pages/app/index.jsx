@@ -7,6 +7,7 @@ import { Analytics } from "@vercel/analytics/react";
 import numerify from "numerify/lib/index.cjs";
 import qs from "query-string";
 import JSZip from "jszip";
+import Image from "next/image";
 
 const { Dragger } = Upload;
 
@@ -17,12 +18,11 @@ const App = () => {
   const [outputOptions, setOutputOptions] = useState("");
   const [files, setFiles] = useState("");
   const [outputFiles, setOutputFiles] = useState([]);
-  const [href, setHref] = useState("");
+  const [outputImageUrl, setOutputImageUrl] = useState("");
   const [file, setFile] = useState();
   const [fileList, setFileList] = useState([]);
   const [name, setName] = useState("input.mp4");
   const [output, setOutput] = useState("output.mp4");
-  const [downloadFileName, setDownloadFileName] = useState("output.mp4");
   const ffmpeg = useRef();
   const currentFSls = useRef([]);
 
@@ -31,11 +31,17 @@ const App = () => {
       return;
     }
     setOutputFiles([]);
-    setHref("");
-    setDownloadFileName("");
+    setOutputImageUrl("");
     try {
       setTip("Loading file into browser");
       setSpinning(true);
+
+      console.log("Files to process:", fileList);
+      console.log(
+        "FFmpeg command:",
+        `ffmpeg ${inputOptions} ${name} ${outputOptions} ${output}`
+      );
+
       for (const fileItem of fileList) {
         ffmpeg.current.FS(
           "writeFile",
@@ -45,6 +51,7 @@ const App = () => {
       }
       currentFSls.current = ffmpeg.current.FS("readdir", ".");
       setTip("start executing the command");
+
       await ffmpeg.current.run(
         ...inputOptions.split(" "),
         name,
@@ -61,26 +68,23 @@ const App = () => {
         const objectURL = URL.createObjectURL(
           new Blob([data.buffer], { type: type.mime })
         );
-        setHref(objectURL);
-        setDownloadFileName(outputFiles[0]);
-        message.success(
-          "Run successfully, click the download button to download the output file",
-          10
-        );
+        setOutputImageUrl(objectURL);
+        message.success("Run successfully, output image displayed below", 10);
       } else if (outputFiles.length > 1) {
-        var zip = new JSZip();
-        outputFiles.forEach((filleName) => {
-          const data = ffmpeg.current.FS("readFile", filleName);
-          zip.file(filleName, data);
-        });
-        const zipFile = await zip.generateAsync({ type: "blob" });
-        const objectURL = URL.createObjectURL(zipFile);
-        setHref(objectURL);
-        setDownloadFileName("output.zip");
-        message.success(
-          "Run successfully, click the download button to download the output file",
-          10
-        );
+        const outputImagesData = [];
+        for (const fileName of outputFiles) {
+          const data = ffmpeg.current.FS("readFile", fileName);
+          const type = await fileTypeFromBuffer(data.buffer);
+          const objectURL = URL.createObjectURL(
+            new Blob([data.buffer], { type: type.mime })
+          );
+          outputImagesData.push({
+            name: fileName,
+            url: objectURL,
+          });
+        }
+        setOutputFiles(outputImagesData);
+        message.success("Run successfully, output images displayed below", 10);
       } else {
         message.success(
           "Run successfully, No files are generated, if you want to see the output of the ffmpeg command, please open the console",
@@ -115,7 +119,7 @@ const App = () => {
         );
         outputFilesData.push({
           name: filename,
-          href: objectURL,
+          url: objectURL,
         });
       } catch (err) {
         message.error(`${filename} get failed`);
@@ -129,7 +133,8 @@ const App = () => {
     (async () => {
       ffmpeg.current = createFFmpeg({
         log: true,
-        corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js',
+        corePath:
+          "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js",
       });
       ffmpeg.current.setProgress(({ ratio }) => {
         console.log(ratio);
@@ -215,33 +220,37 @@ const App = () => {
         />
         <Input
           value={output}
-          placeholder="Please enter the download file name"
+          placeholder="Please enter the output file name"
           onChange={(event) => setOutput(event.target.value)}
         />
         <div className="command-text">
           ffmpeg {inputOptions} {name} {outputOptions} {output}
         </div>
       </div>
-      <h4>3. Run and get the output file</h4>
+      <h4>3. Run and view the output image</h4>
       <Button type="primary" disabled={!Boolean(file)} onClick={handleExec}>
         run
       </Button>
       <br />
       <br />
-      {href && (
-        <a href={href} download={downloadFileName}>
-          download file
-        </a>
+      {outputImageUrl && (
+        <Image
+          src={outputImageUrl}
+          alt="Output"
+          width={500}
+          height={300}
+          style={{ maxWidth: "100%", height: "auto" }}
+        />
       )}
-      <h4>4. Get other file from file system (use , split)</h4>
+      <h4>4. Get other images from file system (use , split)</h4>
       <p style={{ color: "gray" }}>
-        In some scenarios, the output file contains multiple files. At this
-        time, multiple file names can be separated by commas and typed into the
-        input box below.
+        In some scenarios, the output contains multiple images. At this time,
+        multiple file names can be separated by commas and typed into the input
+        box below.
       </p>
       <Input
         value={files}
-        placeholder="Please enter the download file name"
+        placeholder="Please enter the image file names"
         onChange={(event) => setFiles(event.target.value)}
       />
       <Button type="primary" disabled={!Boolean(file)} onClick={handleGetFiles}>
@@ -251,9 +260,14 @@ const App = () => {
       <br />
       {outputFiles.map((outputFile, index) => (
         <div key={index}>
-          <a href={outputFile.href} download={outputFile.name}>
-            {outputFile.name}
-          </a>
+          <p>{outputFile.name}</p>
+          <Image
+            src={outputFile.url}
+            alt={outputFile.name}
+            width={500}
+            height={300}
+            style={{ maxWidth: "100%", height: "auto" }}
+          />
           <br />
         </div>
       ))}
