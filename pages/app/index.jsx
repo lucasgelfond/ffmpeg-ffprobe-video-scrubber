@@ -1,4 +1,4 @@
-import { Upload, Button, message, Slider, Input } from "antd";
+import { Upload, Button, message, Slider, Input, Switch } from "antd";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createFFmpeg, fetchFile } from "@ffmpeg/ffmpeg";
 import { InboxOutlined, LeftOutlined, RightOutlined } from "@ant-design/icons";
@@ -14,12 +14,13 @@ const App = () => {
   const [videoInfo, setVideoInfo] = useState({
     width: 0,
     height: 0,
-    totalFrames: 50,
+    totalFrames: 0,
     duration: 0,
     frameRate: 0,
   });
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [videoUrl, setVideoUrl] = useState("");
+  const [useNativeVideo, setUseNativeVideo] = useState(true);
   const videoRef = useRef();
   const ffmpeg = useRef();
   const fileLoaded = useRef(false);
@@ -28,6 +29,7 @@ const App = () => {
   useEffect(() => {
     ffprobeWorker.current = new FFprobeWorker();
   }, []);
+
   const extractFrame = useCallback(
     async (frameNum) => {
       if (!file) {
@@ -69,23 +71,29 @@ const App = () => {
 
   const handleSliderChange = async (value) => {
     setFrameNumber(value);
-    setIsScrubbing(true);
-    if (videoRef.current) {
-      videoRef.current.currentTime = value / videoInfo.frameRate;
+    if (useNativeVideo) {
+      setIsScrubbing(true);
+      if (videoRef.current) {
+        videoRef.current.currentTime = value / videoInfo.frameRate;
+      }
+    } else {
+      await extractFrame(value);
     }
   };
 
   const handleSliderAfterChange = async (value) => {
-    setIsScrubbing(false);
-    setOutputImageUrl(""); // Clear the image while extracting new frame
-    await extractFrame(value);
+    if (useNativeVideo) {
+      setIsScrubbing(false);
+      setOutputImageUrl(""); // Clear the image while extracting new frame
+      await extractFrame(value);
+    }
   };
 
   const handleInputChange = async (e) => {
     const value = parseInt(e.target.value);
     if (!isNaN(value) && value >= 1 && value <= videoInfo.totalFrames) {
       setFrameNumber(value);
-      if (videoRef.current) {
+      if (useNativeVideo && videoRef.current) {
         videoRef.current.currentTime = value / videoInfo.frameRate;
       }
       await extractFrame(value);
@@ -144,12 +152,18 @@ const App = () => {
 
   return (
     <div className="page-app">
-      <h2 align="center">FFmpeg Frame Extractor</h2>
+      <h2 align="center">FFmpeg Frame Scrubber</h2>
+
+      <div style={{ marginBottom: "20px" }}>
+        <Switch
+          checked={useNativeVideo}
+          onChange={setUseNativeVideo}
+          checkedChildren="Using native video in scrubbing"
+          unCheckedChildren="Using frame extraction in scrubbing"
+        />
+      </div>
 
       <h4>Upload Video</h4>
-      <p style={{ color: "gray" }}>
-        Your file will be processed entirely in the browser
-      </p>
       <Dragger
         beforeUpload={(file) => {
           setFile(file);
@@ -212,7 +226,7 @@ const App = () => {
       {file && (
         <div style={{ marginTop: "20px" }}>
           <h4>Preview</h4>
-          {isScrubbing || !outputImageUrl ? (
+          {useNativeVideo && (isScrubbing || !outputImageUrl) ? (
             <video
               ref={videoRef}
               src={videoUrl}
@@ -220,7 +234,7 @@ const App = () => {
               height={displayHeight}
               style={{ maxWidth: "100%", height: "auto" }}
             />
-          ) : (
+          ) : outputImageUrl ? (
             <Image
               src={outputImageUrl}
               alt="Extracted Frame"
@@ -228,7 +242,7 @@ const App = () => {
               height={displayHeight}
               style={{ maxWidth: "100%", height: "auto" }}
             />
-          )}
+          ) : null}
         </div>
       )}
     </div>
