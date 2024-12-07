@@ -11,8 +11,11 @@ const App = () => {
   const [outputImageUrl, setOutputImageUrl] = useState("");
   const [file, setFile] = useState();
   const [frameNumber, setFrameNumber] = useState(1);
+  const [isScrubbingVideo, setIsScrubbingVideo] = useState(false);
   const ffmpeg = useRef();
   const fileLoaded = useRef(false);
+  const videoRef = useRef();
+  const videoUrl = useRef();
 
   const extractFrame = useCallback(
     async (frameNum) => {
@@ -55,6 +58,14 @@ const App = () => {
 
   const handleSliderChange = (value) => {
     setFrameNumber(value);
+    setIsScrubbingVideo(true);
+    if (videoRef.current) {
+      videoRef.current.currentTime = value / 30;
+    }
+  };
+
+  const handleSliderAfterChange = (value) => {
+    setIsScrubbingVideo(false);
     extractFrame(value);
   };
 
@@ -69,13 +80,26 @@ const App = () => {
     })();
   }, []);
 
-  // Reset fileLoaded when a new file is selected
+  // Reset fileLoaded and create video URL when a new file is selected
   useEffect(() => {
     fileLoaded.current = false;
     if (file) {
+      if (videoUrl.current) {
+        URL.revokeObjectURL(videoUrl.current);
+      }
+      videoUrl.current = URL.createObjectURL(file);
       extractFrame(0); // Extract first frame immediately when file is loaded
     }
   }, [file, extractFrame]);
+
+  // Cleanup video URL on unmount
+  useEffect(() => {
+    return () => {
+      if (videoUrl.current) {
+        URL.revokeObjectURL(videoUrl.current);
+      }
+    };
+  }, []);
 
   return (
     <div className="page-app">
@@ -113,12 +137,32 @@ const App = () => {
           max={50}
           value={frameNumber}
           onChange={handleSliderChange}
+          onAfterChange={handleSliderAfterChange}
           disabled={!file}
         />
         <p>Current frame: {frameNumber}</p>
       </div>
 
-      {outputImageUrl && (
+      {file && (
+        <div
+          style={{
+            marginTop: "20px",
+            display: isScrubbingVideo ? "block" : "none",
+          }}
+        >
+          <h4>Video Preview</h4>
+          <video
+            ref={videoRef}
+            src={videoUrl.current}
+            style={{ maxWidth: "100%", height: "auto" }}
+            controls={false}
+            playsInline
+            muted
+          />
+        </div>
+      )}
+
+      {outputImageUrl && !isScrubbingVideo && (
         <>
           <h4>Extracted Frame</h4>
           <Image
