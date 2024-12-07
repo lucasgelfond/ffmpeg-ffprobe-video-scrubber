@@ -18,6 +18,9 @@ const App = () => {
     duration: 0,
     frameRate: 0,
   });
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [videoUrl, setVideoUrl] = useState("");
+  const videoRef = useRef();
   const ffmpeg = useRef();
   const fileLoaded = useRef(false);
   const ffprobeWorker = useRef();
@@ -69,6 +72,14 @@ const App = () => {
 
   const handleSliderChange = async (value) => {
     setFrameNumber(value);
+    setIsScrubbing(true);
+    if (videoRef.current) {
+      videoRef.current.currentTime = value / videoInfo.frameRate;
+    }
+  };
+
+  const handleSliderAfterChange = async (value) => {
+    setIsScrubbing(false);
     await extractFrame(value);
   };
 
@@ -76,6 +87,9 @@ const App = () => {
     const value = parseInt(e.target.value);
     if (!isNaN(value) && value >= 1 && value <= videoInfo.totalFrames) {
       setFrameNumber(value);
+      if (videoRef.current) {
+        videoRef.current.currentTime = value / videoInfo.frameRate;
+      }
       await extractFrame(value);
     }
   };
@@ -119,10 +133,16 @@ const App = () => {
   useEffect(() => {
     fileLoaded.current = false;
     if (file) {
+      const url = URL.createObjectURL(file);
+      setVideoUrl(url);
       getVideoInfo();
       extractFrame(0); // Extract first frame immediately when file is loaded
+      return () => URL.revokeObjectURL(url);
     }
   }, [file, extractFrame, getVideoInfo]);
+
+  const displayWidth = Math.round(videoInfo.width / 4);
+  const displayHeight = Math.round(videoInfo.height / 4);
 
   return (
     <div className="page-app">
@@ -160,6 +180,7 @@ const App = () => {
           max={videoInfo.totalFrames}
           value={frameNumber}
           onChange={handleSliderChange}
+          onAfterChange={handleSliderAfterChange}
           disabled={!file}
         />
         <div
@@ -190,17 +211,29 @@ const App = () => {
         </div>
       </div>
 
-      {outputImageUrl && (
-        <>
-          <h4>Extracted Frame</h4>
-          <Image
-            src={outputImageUrl}
-            alt="Extracted Frame"
-            width={500}
-            height={300}
-            style={{ maxWidth: "100%", height: "auto" }}
-          />
-        </>
+      {file && (
+        <div style={{ marginTop: "20px" }}>
+          <h4>Preview</h4>
+          {isScrubbing ? (
+            <video
+              ref={videoRef}
+              src={videoUrl}
+              width={displayWidth}
+              height={displayHeight}
+              style={{ maxWidth: "100%", height: "auto" }}
+            />
+          ) : (
+            outputImageUrl && (
+              <Image
+                src={outputImageUrl}
+                alt="Extracted Frame"
+                width={displayWidth}
+                height={displayHeight}
+                style={{ maxWidth: "100%", height: "auto" }}
+              />
+            )
+          )}
+        </div>
       )}
     </div>
   );
