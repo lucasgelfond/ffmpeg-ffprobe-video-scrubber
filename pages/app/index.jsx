@@ -1,5 +1,5 @@
 import { Upload, Button, message, Slider } from "antd";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { createFFmpeg, fetchFile } from "@ffmpeg/ffmpeg";
 import { InboxOutlined } from "@ant-design/icons";
 import { Analytics } from "@vercel/analytics/react";
@@ -12,38 +12,46 @@ const App = () => {
   const [file, setFile] = useState();
   const [frameNumber, setFrameNumber] = useState(1);
   const ffmpeg = useRef();
+  const fileLoaded = useRef(false);
 
-  const extractFrame = async (frameNum) => {
-    if (!file) {
-      return;
-    }
-    try {
-      ffmpeg.current.FS("writeFile", file.name, await fetchFile(file));
-      await ffmpeg.current.run(
-        "-ss",
-        `${frameNum / 30}`, // Assuming 30fps - converts frame number to seconds
-        "-i",
-        file.name,
-        "-frames:v",
-        "1",
-        "-q:v",
-        "5",
-        "-vf",
-        "scale=320:-1",
-        "-preset",
-        "ultrafast",
-        "frame.jpg"
-      );
+  const extractFrame = useCallback(
+    async (frameNum) => {
+      if (!file) {
+        return;
+      }
+      try {
+        if (!fileLoaded.current) {
+          ffmpeg.current.FS("writeFile", file.name, await fetchFile(file));
+          fileLoaded.current = true;
+        }
 
-      const data = ffmpeg.current.FS("readFile", "frame.jpg");
-      const objectURL = URL.createObjectURL(
-        new Blob([data.buffer], { type: "image/jpeg" })
-      );
-      setOutputImageUrl(objectURL);
-    } catch (err) {
-      console.error(err);
-    }
-  };
+        await ffmpeg.current.run(
+          "-ss",
+          `${frameNum / 30}`,
+          "-i",
+          file.name,
+          "-frames:v",
+          "1",
+          "-q:v",
+          "2",
+          "-vf",
+          "scale=480:-1",
+          "-preset",
+          "ultrafast",
+          "frame.jpg"
+        );
+
+        const data = ffmpeg.current.FS("readFile", "frame.jpg");
+        const objectURL = URL.createObjectURL(
+          new Blob([data.buffer], { type: "image/jpeg" })
+        );
+        setOutputImageUrl(objectURL);
+      } catch (err) {
+        console.error(err);
+      }
+    },
+    [file]
+  );
 
   const handleSliderChange = (value) => {
     setFrameNumber(value);
@@ -60,6 +68,14 @@ const App = () => {
       await ffmpeg.current.load();
     })();
   }, []);
+
+  // Reset fileLoaded when a new file is selected
+  useEffect(() => {
+    fileLoaded.current = false;
+    if (file) {
+      extractFrame(0); // Extract first frame immediately when file is loaded
+    }
+  }, [file, extractFrame]);
 
   return (
     <div className="page-app">
