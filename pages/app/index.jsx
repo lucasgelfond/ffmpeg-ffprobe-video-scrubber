@@ -28,7 +28,11 @@ const App = () => {
         "-frames:v",
         "1",
         "-q:v",
-        "2", // Lower quality for faster processing
+        "5", // Medium compression quality - range is 2-31
+        "-vf",
+        "scale=320:-1", // Increased resolution to 480px width
+        "-preset",
+        "ultrafast", // Fastest encoding preset
         "frame.jpg"
       );
 
